@@ -62,7 +62,18 @@ type publisher struct {
 }
 
 // NewPublisher - Constructor
-func NewPublisher(storage *db.Storage, identityService ports.IdentityService, claimService ports.ClaimsService, mtService ports.MtService, kms kms.KMSType, transactionService ports.TransactionService, zkService ports.ZKGenerator, publisherGateway PublisherGateway, confirmationTimeout time.Duration, notificationPublisher pubsub.Publisher) *publisher {
+func NewPublisher(
+	storage *db.Storage,
+	identityService ports.IdentityService,
+	claimService ports.ClaimsService,
+	mtService ports.MtService,
+	kms kms.KMSType,
+	transactionService ports.TransactionService,
+	zkService ports.ZKGenerator,
+	publisherGateway PublisherGateway,
+	confirmationTimeout time.Duration,
+	notificationPublisher pubsub.Publisher,
+) ports.Publisher {
 	pendingTransactions := sync_ttl_map.New(ttl)
 	pendingTransactions.CleaningBackground(transactionCleanup)
 
@@ -121,7 +132,7 @@ func (p *publisher) publishState(ctx context.Context, identifier *core.DID) (*do
 	}
 
 	if !exists {
-		log.Info(ctx, "no unprocessed states for the given issuer id")
+		log.Debug(ctx, "no unprocessed states for the given issuer id")
 		return nil, ErrNoStatesToProcess
 	}
 
@@ -161,7 +172,7 @@ func (p *publisher) retrypublishFailedState(ctx context.Context, identifier *cor
 	}
 
 	if failedState == nil {
-		log.Info(ctx, "no failed state for the given issuer id")
+		log.Debug(ctx, "no failed state for the given issuer id")
 		return nil, ErrNoFailedStatesToProcess
 	}
 

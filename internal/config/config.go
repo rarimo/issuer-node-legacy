@@ -39,6 +39,10 @@ type Configuration struct {
 	OnChainCheckStatusFrequency  time.Duration      `mapstructure:"OnChainCheckStatusFrequency"`
 	SchemaCache                  *bool              `mapstructure:"SchemaCache"`
 	APIUI                        APIUI              `mapstructure:"APIUI"`
+	OnChainPublishingFrequency   time.Duration      `mapstructure:"OnChainPublishingFrequency"`
+	OnChainRePublishingFrequency time.Duration      `mapstructure:"OnChainRePublishingFrequency"`
+	OnChainPublishingDIDString   string             `mapstructure:"OnChainPublishingDID"`
+	OnChainPublishingDID         core.DID           `mapstructure:"-"`
 }
 
 // Database has the database configuration
@@ -148,6 +152,25 @@ func (c *Configuration) Sanitize() error {
 		return fmt.Errorf("serverUrl is not a valid URL <%s>: %w", c.ServerUrl, err)
 	}
 	c.ServerUrl = sUrl
+
+	return nil
+}
+
+// SanitizePendingPublisher perform some basic checks and sanitizations in the configuration.
+// Returns true if config is acceptable, error otherwise.
+func (c *Configuration) SanitizePendingPublisher() error {
+	sUrl, err := c.validateServerUrl()
+	if err != nil {
+		return fmt.Errorf("serverUrl is not a valid URL <%s>: %w", c.ServerUrl, err)
+	}
+	c.ServerUrl = sUrl
+
+	issuerDID, err := core.ParseDID(c.OnChainPublishingDIDString)
+	if err != nil {
+		return fmt.Errorf("invalid issuer did format")
+	}
+
+	c.OnChainPublishingDID = *issuerDID
 
 	return nil
 }
@@ -287,6 +310,9 @@ func bindEnv() {
 	_ = viper.BindEnv("NativeProofGenerationEnabled", "ISSUER_NATIVE_PROOF_GENERATION_ENABLED")
 	_ = viper.BindEnv("PublishingKeyPath", "ISSUER_PUBLISH_KEY_PATH")
 	_ = viper.BindEnv("OnChainCheckStatusFrequency", "ISSUER_ONCHAIN_CHECK_STATUS_FREQUENCY")
+	_ = viper.BindEnv("OnChainPublishingFrequency", "ISSUER_ONCHAIN_PUBLISHING_FREQUENCY")
+	_ = viper.BindEnv("OnChainRePublishingFrequency", "ISSUER_ONCHAIN_REPUBLISHING_FREQUENCY")
+	_ = viper.BindEnv("OnChainPublishingDID", "ISSUER_ONCHAIN_PUBLISHING_DID")
 
 	_ = viper.BindEnv("Database.URL", "ISSUER_DATABASE_URL")
 
@@ -355,6 +381,18 @@ func checkEnvVars(ctx context.Context, cfg *Configuration) {
 
 	if cfg.OnChainCheckStatusFrequency == 0 {
 		log.Info(ctx, "ISSUER_ONCHAIN_CHECK_STATUS_FREQUENCY value is missing")
+	}
+
+	if cfg.OnChainPublishingDIDString == "" {
+		log.Info(ctx, "ISSUER_ONCHAIN_CHECK_STATUS_FREQUENCY value is missing")
+	}
+
+	if cfg.OnChainPublishingFrequency == 0 {
+		log.Info(ctx, "ISSUER_ONCHAIN_PUBLISHING_FREQUENCY value is missing")
+	}
+
+	if cfg.OnChainRePublishingFrequency == 0 {
+		log.Info(ctx, "ISSUER_ONCHAIN_REPUBLISHING_FREQUENCY value is missing")
 	}
 
 	if cfg.Database.URL == "" {
