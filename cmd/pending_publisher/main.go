@@ -200,6 +200,8 @@ func run(
 
 func onChainPublisherRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
 	ticker := time.NewTicker(cfg.OnChainPublishingFrequency)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -250,6 +252,8 @@ func onChainPublisherRunner(ctx context.Context, cfg *config.Configuration, publ
 
 func statusCheckerRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
 	ticker := time.NewTicker(cfg.OnChainCheckStatusFrequency)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
