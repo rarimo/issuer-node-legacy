@@ -5,11 +5,14 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	core "github.com/iden3/go-iden3-core"
+	"github.com/pkg/errors"
 
 	"github.com/polygonid/sh-id-platform/internal/config"
 	"github.com/polygonid/sh-id-platform/internal/core/ports"
@@ -37,6 +40,11 @@ func main() {
 
 	// Context with log
 	ctx, cancel := context.WithCancel(log.NewContext(context.Background(), cfg.Log.Level, cfg.Log.Mode, os.Stdout))
+
+	if err := cfg.SanitizePendingPublisher(); err != nil {
+		log.Error(ctx, "there are errors in the configuration that prevent server to start", "err", err)
+		return
+	}
 
 	rdb, err := redis.Open(cfg.Cache.RedisUrl)
 	if err != nil {
@@ -115,6 +123,11 @@ func main() {
 		ps,
 	)
 
+	if !identifierExists(ctx, &cfg.OnChainPublishingDID, identityService) {
+		log.Error(ctx, "issuer DID must exist")
+		return
+	}
+
 	commonClient, err := ethclient.Dial(cfg.Ethereum.URL)
 	if err != nil {
 		panic("Error dialing with ethclient: " + err.Error())
@@ -150,22 +163,105 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	go func(ctx context.Context) {
-		ticker := time.NewTicker(cfg.OnChainCheckStatusFrequency)
-		for {
-			select {
-			case <-ticker.C:
-				publisher.CheckTransactionStatus(ctx)
-			case <-ctx.Done():
-				log.Info(ctx, "finishing check transaction status job")
-			}
-		}
-	}(ctx)
+	wg := new(sync.WaitGroup)
+	run(ctx, wg, cfg, publisher, onChainPublisherRunner)
+	run(ctx, wg, cfg, publisher, statusCheckerRunner)
 
-	<-quit
+	waitGroupChannel := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(waitGroupChannel)
+	}()
+
+	select {
+	case <-quit:
+	case <-waitGroupChannel:
+	}
+
 	log.Info(ctx, "finishing app")
 	cancel()
 	log.Info(ctx, "Finished")
+}
+
+func run(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	cfg *config.Configuration,
+	publisher ports.Publisher,
+	runner func(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher),
+) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		runner(ctx, cfg, publisher)
+	}()
+}
+
+func onChainPublisherRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
+	ticker := time.NewTicker(cfg.OnChainPublishingFrequency)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// If the previous state publishing is failed, we try to re-publish it
+			republishedState, err := publisher.RetryPublishState(ctx, &cfg.OnChainPublishingDID)
+			if err != nil && !errors.Is(err, gateways.ErrNoFailedStatesToProcess) {
+				if errors.Is(err, gateways.ErrStateIsBeingProcessed) {
+					continue
+				}
+
+				log.Error(ctx, "error re-publishing state", "err", err)
+				continue
+			}
+			if republishedState != nil {
+				ticker.Reset(cfg.OnChainPublishingFrequency)
+				log.Info(ctx, "re-published state",
+					"tx", republishedState.TxID,
+					"state", republishedState.State,
+				)
+				continue
+			}
+
+			publishedState, err := publisher.PublishState(ctx, &cfg.OnChainPublishingDID)
+			if err != nil {
+				if errors.Is(err, gateways.ErrStateIsBeingProcessed) ||
+					errors.Is(err, gateways.ErrNoStatesToProcess) {
+					continue
+				}
+
+				ticker.Reset(cfg.OnChainRePublishingFrequency)
+				log.Error(ctx, "error publishing state", "err", err)
+				continue
+			}
+			if publishedState == nil {
+				log.Error(ctx, "published state is nil")
+				continue
+			}
+
+			log.Info(ctx, "published state",
+				"tx", publishedState.TxID,
+				"state", publishedState.State,
+			)
+		case <-ctx.Done():
+			log.Info(ctx, "finishing on chain publishing job")
+		}
+	}
+}
+
+func statusCheckerRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
+	ticker := time.NewTicker(cfg.OnChainCheckStatusFrequency)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			publisher.CheckTransactionStatus(ctx)
+		case <-ctx.Done():
+			log.Info(ctx, "finishing check transaction status job")
+		}
+	}
 }
 
 func initProofService(ctx context.Context, config *config.Configuration, circuitLoaderService *loaders.Circuits) ports.ZKGenerator {
@@ -182,4 +278,9 @@ func initProofService(ctx context.Context, config *config.Configuration, circuit
 		ResponseTimeout: config.Prover.ResponseTimeout,
 	}
 	return gateways.NewProverService(proverConfig)
+}
+
+func identifierExists(ctx context.Context, did *core.DID, service ports.IdentityService) bool {
+	_, err := service.GetByDID(ctx, *did)
+	return err == nil
 }

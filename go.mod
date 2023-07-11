@@ -43,6 +43,7 @@ require (
 	github.com/pressly/goose/v3 v3.10.0
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
+	gitlab.com/distributed_lab/running v1.6.0
 	golang.org/x/exp v0.0.0-20230310171629-522b1b587ee0
 )
 
@@ -280,6 +281,9 @@ require (
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	gitlab.com/bosi/decorder v0.2.3 // indirect
+	gitlab.com/distributed_lab/figure v2.1.2+incompatible // indirect
+	gitlab.com/distributed_lab/kit v1.11.2 // indirect
+	gitlab.com/distributed_lab/logan v3.8.1+incompatible // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
