@@ -46,7 +46,7 @@ func main() {
 		return
 	}
 
-	rdb, err := redis.Open(cfg.Cache.RedisUrl)
+	rdb, err := redis.Open(cfg.Cache.RedisUrl, cfg.Cache.RedisPassword)
 	if err != nil {
 		log.Error(ctx, "cannot connect to redis", "err", err, "host", cfg.Cache.RedisUrl)
 		return
@@ -165,7 +165,7 @@ func main() {
 
 	wg := new(sync.WaitGroup)
 	run(ctx, wg, cfg, publisher, onChainPublisherRunner)
-	run(ctx, wg, cfg, publisher, statusCheckerRunner)
+	//run(ctx, wg, cfg, publisher, statusCheckerRunner)
 
 	waitGroupChannel := make(chan struct{})
 	go func() {
@@ -205,63 +205,74 @@ func onChainPublisherRunner(ctx context.Context, cfg *config.Configuration, publ
 	for {
 		select {
 		case <-ticker.C:
-			// If the previous state publishing is failed, we try to re-publish it
-			republishedState, err := publisher.RetryPublishState(ctx, &cfg.OnChainPublishingDID)
-			if err != nil && !errors.Is(err, gateways.ErrNoFailedStatesToProcess) {
-				if errors.Is(err, gateways.ErrStateIsBeingProcessed) {
-					continue
-				}
-
-				log.Error(ctx, "error re-publishing state", "err", err)
-				continue
-			}
-			if republishedState != nil {
-				ticker.Reset(cfg.OnChainPublishingFrequency)
-				log.Info(ctx, "re-published state",
-					"tx", republishedState.TxID,
-					"state", republishedState.State,
-				)
-				continue
-			}
-
-			publishedState, err := publisher.PublishState(ctx, &cfg.OnChainPublishingDID)
+			err := publishWithWait(ctx, cfg, publisher)
 			if err != nil {
-				if errors.Is(err, gateways.ErrStateIsBeingProcessed) ||
-					errors.Is(err, gateways.ErrNoStatesToProcess) {
+				if errors.Is(err, gateways.ErrStateIsBeingProcessed) {
+					// Check the status of the transaction and wait until it is mined
+					publisher.CheckTransactionStatus(ctx)
+					ticker.Reset(cfg.OnChainPublishingFrequency)
 					continue
 				}
 
-				ticker.Reset(cfg.OnChainRePublishingFrequency)
 				log.Error(ctx, "error publishing state", "err", err)
-				continue
-			}
-			if publishedState == nil {
-				log.Error(ctx, "published state is nil")
+				ticker.Reset(cfg.OnChainRePublishingFrequency)
 				continue
 			}
 
-			log.Info(ctx, "published state",
-				"tx", publishedState.TxID,
-				"state", publishedState.State,
-			)
-		case <-ctx.Done():
-			log.Info(ctx, "finishing on chain publishing job")
+			ticker.Reset(cfg.OnChainPublishingFrequency)
+			continue
 		}
 	}
 }
 
-func statusCheckerRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
-	ticker := time.NewTicker(cfg.OnChainCheckStatusFrequency)
-	defer ticker.Stop()
+//func statusCheckerRunner(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) {
+//	ticker := time.NewTicker(cfg.OnChainCheckStatusFrequency)
+//	defer ticker.Stop()
+//
+//	for {
+//		select {
+//		case <-ticker.C:
+//			publisher.CheckTransactionStatus(ctx)
+//		case <-ctx.Done():
+//			log.Info(ctx, "finishing check transaction status job")
+//		}
+//	}
+//}
 
-	for {
-		select {
-		case <-ticker.C:
-			publisher.CheckTransactionStatus(ctx)
-		case <-ctx.Done():
-			log.Info(ctx, "finishing check transaction status job")
-		}
+func publishWithWait(ctx context.Context, cfg *config.Configuration, publisher ports.Publisher) error {
+	// If the previous state publishing is failed, we try to re-publish it
+	republishedState, err := publisher.RetryPublishState(ctx, &cfg.OnChainPublishingDID)
+	if err != nil && !errors.Is(err, gateways.ErrNoFailedStatesToProcess) {
+		return errors.Wrap(err, "failed to re-publishing state")
 	}
+	if republishedState != nil {
+		log.Info(ctx, "re-published state",
+			"tx", republishedState.TxID,
+			"state", republishedState.State,
+		)
+
+		return nil
+	}
+
+	// If there is no failed states to re-publish, we try to publish a new state
+	publishedState, err := publisher.PublishState(ctx, &cfg.OnChainPublishingDID)
+	if err != nil {
+		if errors.Is(err, gateways.ErrNoStatesToProcess) {
+			return nil
+		}
+
+		return errors.Wrap(err, "failed to publishing state")
+	}
+	if publishedState != nil {
+		log.Info(ctx, "published state",
+			"tx", publishedState.TxID,
+			"state", publishedState.State,
+		)
+
+		return nil
+	}
+
+	return nil
 }
 
 func initProofService(ctx context.Context, config *config.Configuration, circuitLoaderService *loaders.Circuits) ports.ZKGenerator {
