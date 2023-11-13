@@ -1,31 +1,19 @@
-FROM ubuntu:22.04 as builder
+FROM golang:1.19 as buildbase
 
 ARG VERSION
-WORKDIR /service
-COPY ./api ./api
-COPY ./api_ui ./api_ui
-COPY ./cmd ./cmd
-COPY ./internal ./internal
-COPY ./pkg ./pkg
-COPY ./go.mod ./
-COPY ./go.sum ./
+WORKDIR /go/src/gitlab.com/rarimo/issuer-node
+COPY . .
 
-RUN apt-get update
-RUN apt-get install -y wget build-essential ca-certificates
-RUN wget https://go.dev/dl/go1.20.3.linux-amd64.tar.gz
+RUN GOBIN=/usr/local/bin CGO_ENABLED=1 GOOS=linux go install -buildvcs=false -ldflags "-X main.build=${VERSION}" /go/src/gitlab.com/rarimo/issuer-node/cmd...
 
-# Configure Go
-ENV GOROOT /usr/local/go
-ENV GOPATH /go
-ENV PATH /usr/local/go/bin:/go/bin:$PATH
-ENV GOBIN /service/bin
+FROM alpine:3.18.2
 
-RUN tar -xvf go1.20.3.linux-amd64.tar.gz
-RUN mv go /usr/local
+RUN apk --update add --no-cache musl libstdc++ gcompat libgomp ca-certificates
 
-RUN go mod download
-RUN go install -buildvcs=false -ldflags "-X main.build=${VERSION}" ./cmd/...
-RUN mv /service/bin/* /service/
-RUN rm -R /usr/local/go
-RUN rm -R /service/bin
-RUN rm go1.20.3.linux-amd64.tar.gz
+WORKDIR /
+
+COPY --from=buildbase "/go/src/gitlab.com/rarimo/issuer-node/api" "/api"
+COPY --from=buildbase "/go/src/gitlab.com/rarimo/issuer-node/api_ui" "/api_ui"
+COPY --from=buildbase "/go/pkg/mod/github.com/iden3/wasmer-go@v0.0.1" "/go/pkg/mod/github.com/iden3/wasmer-go@v0.0.1"
+COPY --from=buildbase "/go/src/gitlab.com/rarimo/issuer-node/pkg" "/etc"
+COPY --from=buildbase "/usr/local/bin" "/usr/local/bin"

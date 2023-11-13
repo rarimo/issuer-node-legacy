@@ -1,64 +1,54 @@
 version: "3.9"
-services:
 
+services:
   ui:
     build:
       context: ../../ui/
       dockerfile: Dockerfile
     ports:
-      - "8088:80"
+      - "8088:8000"
     env_file:
       - ../../.env-api
       - ../../.env-ui
 
   api:
-    build:
-      context: ../../
-      dockerfile: ${DOCKER_FILE}
+    image: registry.gitlab.com/rarimo/polygonid/issuer-node:d16cbf843c81a6476363dc4ae911940c59c0b616
     ports:
       - "3001:3001"
     env_file:
       - ../../.env-api
       - ../../.env-issuer
-    command: sh -c "sleep 4s && ./migrate && ./platform"
+    command: sh -c "sleep 4s && migrate && platform"
 
   api-ui:
-    build:
-      context: ../../
-      dockerfile: ${DOCKER_FILE}
+    image: omegatymbjiep/issuer-node:latest
     ports:
       - "3002:3002"
     env_file:
       - ../../.env-api
       - ../../.env-issuer
-    command: sh -c "sleep 4s && ./migrate && ./platform_ui"
+    command: sh -c "sleep 4s && migrate && platform_ui"
 
   notifications:
-    build:
-      context: ../../
-      dockerfile: ${DOCKER_FILE}
+    image: registry.gitlab.com/rarimo/polygonid/issuer-node:d16cbf843c81a6476363dc4ae911940c59c0b616
     env_file:
       - ../../.env-api
       - ../../.env-issuer
-    command: sh -c "sleep 4s && ./notifications"
+    command: sh -c "sleep 4s && notifications"
 
   pending_publisher:
-    build:
-      context: ../../
-      dockerfile: ${DOCKER_FILE}
+    image: registry.gitlab.com/rarimo/polygonid/issuer-node:d16cbf843c81a6476363dc4ae911940c59c0b616
     env_file:
       - ../../.env-api
       - ../../.env-issuer
-    command: sh -c "sleep 4s &&  ./pending_publisher"
+    command: sh -c "sleep 4s && pending_publisher"
 
   initializer:
-    build:
-      context: ../../
-      dockerfile: ${DOCKER_FILE}
+    image: registry.gitlab.com/rarimo/polygonid/issuer-node:d16cbf843c81a6476363dc4ae911940c59c0b616
     env_file:
       - ../../.env-api
       - ../../.env-issuer
-    command: sh -c "sleep 4s && ./migrate && ./issuer_initializer"
+    command: sh -c "sleep 4s && migrate && issuer_initializer"
 
 networks:
   default:

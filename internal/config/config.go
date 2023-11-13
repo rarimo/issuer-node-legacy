@@ -53,7 +53,8 @@ type Database struct {
 
 // Cache configurations
 type Cache struct {
-	RedisUrl string `mapstructure:"RedisUrl" tip:"The redis url to use as a cache"`
+	RedisUrl      string `mapstructure:"RedisUrl" tip:"The redis url to use as a cache"`
+	RedisPassword string `mapstructure:"RedisPassword" tip:"The redis password to use as a cache"`
 }
 
 // ReverseHashService contains the reverse hash service properties
@@ -348,6 +349,7 @@ func bindEnv() {
 	_ = viper.BindEnv("Circuit.Path", "ISSUER_CIRCUIT_PATH")
 
 	_ = viper.BindEnv("Cache.RedisUrl", "ISSUER_REDIS_URL")
+	_ = viper.BindEnv("Cache.RedisPassword", "ISSUER_REDIS_PASSWORD")
 	_ = viper.BindEnv("SchemaCache", "ISSUER_SCHEMA_CACHE")
 
 	_ = viper.BindEnv("APIUI.ServerPort", "ISSUER_API_UI_SERVER_PORT")

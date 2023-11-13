@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -59,6 +60,7 @@ type publisher struct {
 	publisherGateway      PublisherGateway
 	pendingTransactions   *sync_ttl_map.TTLMap
 	notificationPublisher pubsub.Publisher
+	sync.Mutex
 }
 
 // NewPublisher - Constructor
@@ -93,6 +95,9 @@ func NewPublisher(
 }
 
 func (p *publisher) PublishState(ctx context.Context, identifier *core.DID) (*domain.PublishedState, error) {
+	p.Lock()
+	defer p.Unlock()
+
 	idStr := identifier.String()
 	processingEntity := p.pendingTransactions.Load(idStr)
 	if processingEntity != nil {
@@ -109,6 +114,9 @@ func (p *publisher) PublishState(ctx context.Context, identifier *core.DID) (*do
 }
 
 func (p *publisher) RetryPublishState(ctx context.Context, identifier *core.DID) (*domain.PublishedState, error) {
+	p.Lock()
+	defer p.Unlock()
+
 	idStr := identifier.String()
 	processingEntity := p.pendingTransactions.Load(idStr)
 	if processingEntity != nil {

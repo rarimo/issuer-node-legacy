@@ -69,36 +69,17 @@ run:
 	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile" $(DOCKER_COMPOSE_CMD) up -d api pending_publisher
 	@if [ $(DELETE_FILE) = "true" ] ; then rm ./.env-ui; fi
 
-.PHONY: run-arm
-run-arm:
-	$(eval DELETE_FILE = $(shell if [ -f ./.env-ui ]; then echo "false"; else echo "true"; fi))
-	@if [ -f ./.env-ui ]; then echo "false"; else touch ./.env-ui; fi
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile-arm" $(DOCKER_COMPOSE_CMD) up -d api pending_publisher
-	@if [ $(DELETE_FILE) = "true" ] ; then rm ./.env-ui; fi
-
 .PHONY: run-ui
 run-ui: add-host-url-swagger
 	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile" $(DOCKER_COMPOSE_CMD) up -d api-ui ui notifications pending_publisher
 
-.PHONY: run-ui-arm
-run-ui-arm: add-host-url-swagger
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile-arm" $(DOCKER_COMPOSE_CMD) up -d api-ui ui notifications pending_publisher
-	
 .PHONY: build
 build:
 	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile" $(DOCKER_COMPOSE_CMD) build api pending_publisher
 
-.PHONY: build-arm
-build-arm:
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile-arm" $(DOCKER_COMPOSE_CMD) build api pending_publisher
-
 .PHONY: build-ui
 build-ui:
 	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile" $(DOCKER_COMPOSE_CMD) build api-ui ui notifications pending_publisher
-
-.PHONY: build-ui-arm
-build-ui-arm:
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile-arm" $(DOCKER_COMPOSE_CMD) build api-ui ui notifications pending_publisher
 
 .PHONY: down
 down:
@@ -174,20 +155,6 @@ generate-issuer-did: run-initializer
 	mv .env-api.tmp .env-api
 	docker rm issuer-initializer-1
 
-.PHONY: run-initializer-arm
-run-initializer-arm:
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_FILE="Dockerfile-arm" $(DOCKER_COMPOSE_CMD) up -d initializer
-	sleep 5
-
-.PHONY: generate-issuer-did-arm
-generate-issuer-did-arm: run-initializer-arm
-	$(eval DID = $(shell docker logs -f --tail 1 issuer-initializer-1 | grep "did"))
-	@echo $(DID)
-	sed '/ISSUER_API_UI_ISSUER_DID/d' .env-api > .env-api.tmp
-	@echo ISSUER_API_UI_ISSUER_DID=$(DID) >> .env-api.tmp
-	mv .env-api.tmp .env-api
-	docker rm issuer-initializer-1
-
 .PHONY: add-host-url-swagger
 add-host-url-swagger:
 	@if [ $(ENVIRONMENT) != "" ] && [ $(ENVIRONMENT) != "local" ]; then \
@@ -200,6 +167,3 @@ rm-issuer-imgs: stop
 
 .PHONY: restart-ui
 restart-ui: rm-issuer-imgs up run run-ui
-
-.PHONY: restart-ui-arm
-restart-ui-arm: rm-issuer-imgs up run-arm run-ui-arm

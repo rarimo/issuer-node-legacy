@@ -1,0 +1,49 @@
+configVersion: 1
+project: "backend"
+---
+image: builder # Build image name.
+from: golang:1.20 # Base image.
+docker:
+  WORKDIR: /go/src/gitlab.com/rarimo/issuer-node
+git: # Section with directives for adding source files from a git repository.
+  - add: / # The source path in the repository.
+    to: /go/src/gitlab.com/rarimo/issuer-node # The destination path in the image.
+    stageDependencies: # Configuring rebuild triggers when specific files in the repository change.
+      install:
+        - go.mod
+        - go.sum
+      setup: # For the Setup stage.
+        - "**/*"
+shell: # Shell build instructions.
+  setup: # For the Setup stage.
+    - cd /go/src/gitlab.com/rarimo/issuer-node
+    - CGO_ENABLED=1 GOOS=linux GOBIN=/usr/local/bin go install -buildvcs=false -ldflags "-X main.build=${VERSION}" /go/src/gitlab.com/rarimo/issuer-node/cmd...
+
+---
+image: service # The name of the built image.
+from: alpine:3.18.2 # The base image.
+docker:
+shell: # Shell build instructions.
+  setup: # For the Setup stage.
+    - apk add --no-cache musl libstdc++ gcompat libgomp ca-certificates
+import:
+  - image: builder
+    add: /usr/local/bin
+    to: /usr/local/bin
+    after: setup
+  - image: builder
+    add: /go/pkg/mod/github.com/iden3/wasmer-go@v0.0.1
+    to: /go/pkg/mod/github.com/iden3/wasmer-go@v0.0.1
+    after: setup
+  - image: builder
+    add: /go/src/gitlab.com/rarimo/issuer-node/api
+    to: /api
+    after: setup
+  - image: builder
+    add: /go/src/gitlab.com/rarimo/issuer-node/api_ui
+    to: /api_ui
+    after: setup
+  - image: builder
+    add: /go/src/gitlab.com/rarimo/issuer-node/pkg
+    to: /etc
+    after: setup

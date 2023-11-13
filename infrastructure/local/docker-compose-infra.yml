@@ -1,17 +1,18 @@
 version: "3.9"
 services:
   postgres:
-    image: postgres:14-alpine
+    image: postgres:13.6
     hostname: postgres
+    restart: unless-stopped
     environment:
-      - PGPORT=5432
-      - PGUSER=postgres
-      - POSTGRES_HOST_AUTH_METHOD=trust
-      - POSTGRES_USER=postgres
+      - POSTGRES_USER=polygonid
+      - POSTGRES_PASSWORD=polygonid
+      - POSTGRES_DB=platformid
+      - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
-      - ./scripts/sql:/docker-entrypoint-initdb.d:ro
+      - platformid-data:/var/lib/postgresql/data/pgdata
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready" ]
       interval: 10s
@@ -62,6 +63,14 @@ services:
     cap_add:
       - IPC_LOCK
     command: ./vault/scripts/init.sh
+    healthcheck:
+      test: [ "CMD", "vault", "status" ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  platformid-data:
 
 networks:
   default:

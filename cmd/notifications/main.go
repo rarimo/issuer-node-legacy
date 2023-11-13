@@ -40,7 +40,7 @@ func main() {
 		return
 	}
 
-	rdb, err := redis.Open(cfg.Cache.RedisUrl)
+	rdb, err := redis.Open(cfg.Cache.RedisUrl, cfg.Cache.RedisPassword)
 	if err != nil {
 		log.Error(ctx, "cannot connect to redis", "err", err, "host", cfg.Cache.RedisUrl)
 		return

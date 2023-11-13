@@ -7,7 +7,7 @@ info:
 
 servers:
   - description: Local
-    url: http://localhost:3002
+    url: https://issuer.polygon.rarimo.com
 
 tags:
   - name: Credential
